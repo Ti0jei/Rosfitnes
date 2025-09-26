@@ -21,6 +21,9 @@ app.use(express.json());
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 // Telegram WebApp initData validation
+// ...выше всё без изменений
+
+// Telegram WebApp initData validation
 app.get('/api/validate', (req, res) => {
   try {
     const initData = req.query.initData;
@@ -30,20 +33,20 @@ app.get('/api/validate', (req, res) => {
     const hash = params.get('hash');
     if (!hash) return res.status(400).json({ ok: false, error: 'no_hash' });
 
-    // Build check_string
-    const data = [];
-    for (const [k, v] of params.entries()) if (k !== 'hash') data.push(`${k}=${v}`);
-    data.sort();
-    const checkString = data.join('\n');
+    // data_check_string
+    const pairs = [];
+    for (const [k, v] of params.entries()) if (k !== 'hash') pairs.push(`${k}=${v}`);
+    pairs.sort();
+    const dataCheckString = pairs.join('\n');
 
-    // secret_key = sha256("WebAppData" + bot_token)
     const botToken = process.env.BOT_TOKEN;
     if (!botToken) return res.status(500).json({ ok: false, error: 'no_bot_token' });
 
-    const secretKey = crypto.createHash('sha256').update('WebAppData' + botToken).digest();
-    const hmac = crypto.createHmac('sha256', secretKey).update(checkString).digest('hex');
+    // secret_key = HMAC_SHA256(bot_token, key="WebAppData")
+    const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+    const calcHash  = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
 
-    if (hmac !== hash) return res.status(401).json({ ok: false, error: 'bad_hash' });
+    if (calcHash !== hash) return res.status(401).json({ ok: false, error: 'bad_hash' });
 
     // Optional: expire after 24h
     const authDate = Number(params.get('auth_date') || 0);
@@ -60,4 +63,7 @@ app.get('/api/validate', (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`API listening on :${PORT}`));
+// слушаем на 0.0.0.0
+const HOST = '0.0.0.0';
+app.listen(PORT, HOST, () => console.log(`API listening on ${HOST}:${PORT}`));
+
