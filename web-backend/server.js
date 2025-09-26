@@ -163,7 +163,10 @@ function startPythonBot() {
   } finally {
     // 4) бот + API
     startPythonBot();
-    app.listen(PORT, HOST, () => console.log(`API listening on ${HOST}:${PORT}`));
+    app.listen(PORT, () => {
+      console.log(`✅ Server is running on port ${PORT}`);
+    });
+
   }
 })();
 
