@@ -14,7 +14,7 @@ import crypto from 'crypto';
 import { spawn } from 'child_process';
 import fs from 'fs';
 import https from 'https';
-
+import { PrismaClient } from '@prisma/client';
 
 const ROOT      = path.resolve(__dirname, '..');
 const HOST      = '0.0.0.0';
@@ -34,6 +34,9 @@ app.use(cors({
   }
 }));
 app.use(express.json());
+
+// Prisma client (используем один экземпляр)
+const prisma = new PrismaClient();
 
 // health
 app.get('/', (_req, res) => res.send('OK'));
@@ -166,12 +169,18 @@ function startPythonBot() {
 
 process.on('SIGTERM', () => process.exit(0));
 process.on('SIGINT',  () => process.exit(0));
+
+// ---------------------------
 // [GET] /api/user?initData=...
-app.get('/api/user', (req, res) => {
+// ---------------------------
+app.get('/api/user', async (req, res) => {
   try {
     const initData = req.query.initData;
-    if (!initData) return res.status(400).json({ ok: false, error: 'no_initData' });
+    if (!initData || typeof initData !== 'string') {
+      return res.status(400).json({ ok: false, error: 'no_initData' });
+    }
 
+    // 1) валидируем подпись точно так же, как в /api/validate
     const params = new URLSearchParams(initData);
     const hash = params.get('hash');
     if (!hash) return res.status(400).json({ ok: false, error: 'no_hash' });
@@ -189,14 +198,38 @@ app.get('/api/user', (req, res) => {
 
     if (calcHash !== hash) return res.status(401).json({ ok: false, error: 'bad_hash' });
 
-    // 👤 Берём user (id, имя)
+    // 2) получаем user из подписанной строки
     const userStr = params.get('user');
     const user = userStr ? JSON.parse(userStr) : null;
+    const tg_id = user?.id ? Number(user.id) : null;
+    if (!tg_id) return res.status(400).json({ ok: false, error: 'no_tg_id' });
 
-    // 🧠 Здесь мы можем подставить фиктивный тариф (или взять из базы в будущем)
+    // 3) подгружаем профиль из Prisma (таблица user — см. schema.prisma)
+    let dbUser = null;
+    try {
+      dbUser = await prisma.user.findUnique({
+        where: { tg_id: Number(tg_id) },
+      });
+    } catch (e) {
+      console.error('[prisma] findUnique error', e);
+      return res.status(500).json({ ok: false, error: 'db_error' });
+    }
+
+    if (!dbUser) {
+      // Не найден пользователь в БД — возвращаем минимальные данные (имя из Telegram)
+      const profile = {
+        first_name: user?.first_name || null,
+        tariffName: null
+      };
+      return res.json({ ok: true, user, profile });
+    }
+
+    // 4) Нормализуем профиль для фронта: гарантируем поля first_name и tariffName
     const profile = {
-      first_name: user?.first_name || 'друг',
-      tariffName: 'Базовый' // тут можно подставлять тариф динамически
+      first_name: dbUser.first_name || dbUser.name || user?.first_name || null,
+      tariffName: dbUser.tariffName || dbUser.tariff || null,
+      // при желании можно вернуть дополнительные поля:
+      // tg_id: dbUser.tg_id, email: dbUser.email, etc.
     };
 
     return res.json({ ok: true, user, profile });
