@@ -1,11 +1,4 @@
 {
-  "name": "rosfit-frontend",
-  "private": true,
-  "version": "0.1.0",
-  "scripts": {
-    "start": "serve -s . -l $PORT"
-  },
-  "dependencies": {
-    "serve": "^14.2.1"
-  }
+  "scripts": { "start": "serve -s . -l $PORT" },
+  "dependencies": { "serve": "^14.2.1" }
 }
