@@ -1,18 +1,18 @@
 (function () {
   // Telegram WebApp API (если запущено внутри Telegram)
-  const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+  const tg = window.Telegram?.WebApp || null;
   const qs = new URLSearchParams(location.search);
 
   // URL вашего бэкенда (Express из web-backend/server.js)
   const API_BASE = window.ENV?.API_BASE || "";
 
-  // DOM-узлы
+  // DOM-элементы
   const envStatus   = document.getElementById('envStatus');
   const greetingEl  = document.getElementById('greeting');
   const tariffEl    = document.getElementById('tariff');
   const themeNameEl = document.getElementById('themeName');
 
-  // Тема из Telegram
+  // Установка кастомных CSS-переменных из темы Telegram
   const setCSSFromTheme = (p = {}) => {
     const map = {
       '--bg':     p.bg_color,
@@ -25,21 +25,19 @@
     }
   };
 
-  // Алёрты (работают и вне Telegram)
+  // Показывать alert либо системный, либо telegram-овский
   const showAlert = (msg) => (tg?.showAlert ? tg.showAlert(msg) : alert(msg));
 
-  // Дождаться готовности WebApp (если есть)
+  // Telegram WebApp ready
   const waitReady = () => { try { tg?.ready?.(); } catch (_) {} };
 
-  // Сбор корректной строки initData:
-  // 1) используем tg.initData, если он не пуст;
-  // 2) иначе собираем строку из tg.initDataUnsafe (на некоторых клиентах Telegram initData пустой).
+  // Строим initData, если не передан как строка (собираем вручную из unsafe)
   function buildInitData() {
-    const raw = (tg && tg.initData) || '';
+    const raw = tg?.initData || '';
     if (raw && raw.length > 0) return raw;
 
     const u = tg?.initDataUnsafe || null;
-    if (!u || !u.hash) return ''; // вне Telegram или без подписи — не валидируемся
+    if (!u || !u.hash) return '';
 
     const p = new URLSearchParams();
     if (u.query_id)      p.set('query_id', u.query_id);
@@ -53,29 +51,25 @@
     return p.toString();
   }
 
-  // Подтянуть профиль/тариф после успешной валидации
+  // Получить данные пользователя и тарифа после валидации
   async function fetchUserAndRender(initData) {
     try {
       const res = await fetch(`${API_BASE}/api/user?initData=${encodeURIComponent(initData)}`);
       const json = await res.json().catch(() => ({}));
       if (!json?.ok) return;
 
-      // Имя в приветствии
       const fn = json.profile?.first_name || json.user?.first_name;
       if (fn) greetingEl.textContent = `Привет, ${fn}!`;
 
-      // Тариф
       const tariff = json.profile?.tariffName || 'не куплен';
       tariffEl.textContent = `Тариф: ${tariff}`;
     } catch (e) {
-      // Тихо игнорируем — тариф можно оставить как есть
       console.warn('[user] fetch failed', e);
     }
   }
 
   async function init() {
     try {
-      // Блок Telegram UI/Theme (если открыто в Telegram)
       if (tg) {
         waitReady();
         tg.expand?.();
@@ -86,11 +80,10 @@
         if (u?.first_name) greetingEl.textContent = `Привет, ${u.first_name}!`;
       }
 
-      // Временный тариф из query (?tariff=Базовый/Выгодный/Максимум)
       const qpTariff = qs.get('tariff');
       tariffEl.textContent = `Тариф: ${qpTariff || 'неизвестно'}`;
 
-      // Заглушки разделов
+      // Кнопки-заглушки
       document.querySelectorAll('.tile').forEach(btn => {
         btn.addEventListener('click', () => {
           const action = btn.getAttribute('data-action');
@@ -98,19 +91,18 @@
         });
       });
 
-      // Проверка доступа и подгрузка тарифа с бэка
+      // Валидация initData через бэкенд
       if (API_BASE && tg) {
         envStatus.hidden = false;
         envStatus.textContent = 'Проверка доступа…';
 
-        const initData = buildInitData(); // <-- ключевое отличие
+        const initData = buildInitData();
         const res = await fetch(`${API_BASE}/api/validate?initData=${encodeURIComponent(initData)}`);
         const json = await res.json().catch(() => ({}));
 
         if (json?.ok) {
           envStatus.textContent = 'Доступ подтверждён';
           envStatus.style.color = '#6dd96d';
-          // После валидации тянем профиль/тариф
           await fetchUserAndRender(initData);
         } else {
           envStatus.textContent = `Нет доступа: ${json?.error || 'unknown'}`;
@@ -122,14 +114,14 @@
       showAlert('Ошибка инициализации приложения');
     }
   }
-// --- DEBUG EXPORTS ---
-window.API_BASE = API_BASE;
-window.tg = tg;
-window.buildInitData = typeof buildInitData === 'function' ? buildInitData : () => (tg?.initData || '');
-console.log("tg.initData:", tg?.initData);
-console.log("tg.initDataUnsafe:", tg?.initDataUnsafe);
-window.API_BASE = API_BASE;
-window.buildInitData = () => tg?.initData || '';
+
+  // --- DEBUG EXPORTS ---
+  window.API_BASE = API_BASE;
+  window.tg = tg;
+  window.buildInitData = buildInitData;
+
+  console.log("tg.initData:", tg?.initData);
+  console.log("tg.initDataUnsafe:", tg?.initDataUnsafe);
 
   init();
 })();
