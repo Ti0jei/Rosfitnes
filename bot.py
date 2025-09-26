@@ -25,8 +25,6 @@ os.environ.setdefault("no_proxy", "127.0.0.1,localhost")
 os.environ.setdefault("PRISMA_CLIENT_ENGINE_TYPE", "binary")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 db = Prisma()
-# bot.py
-# ЗАМЕНИ содержимое on_start на это:
 async def on_start(message: Message):
     user = await reg_db.user.find_unique(where={"tg_id": message.from_user.id})
     if user:
