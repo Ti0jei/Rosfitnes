@@ -14,7 +14,8 @@ const ROOT      = path.resolve(__dirname, '..');
 const HOST      = '0.0.0.0';
 const PORT      = process.env.PORT || 8080;
 const PY        = process.env.PYTHON || 'python3';
-const PY_TARGET = path.join(ROOT, '.pylibs'); // локальный "node_modules" для Python
+const PY_TARGET = path.join(ROOT, '.pylibs');     // локальный каталог для py-зависимостей
+const PRISMA_SCHEMA = path.join(ROOT, 'prisma', 'schema.prisma');
 
 const CORS_ORIGIN = (process.env.CORS_ORIGIN || '*')
   .split(',').map(s => s.trim()).filter(Boolean);
@@ -32,7 +33,7 @@ app.use(express.json());
 app.get('/', (_req, res) => res.send('OK'));
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
-// --- Telegram WebApp initData validation ---
+// Telegram WebApp initData validation
 app.get('/api/validate', (req, res) => {
   try {
     const initData = req.query.initData;
@@ -50,7 +51,6 @@ app.get('/api/validate', (req, res) => {
     const botToken = process.env.BOT_TOKEN;
     if (!botToken) return res.status(500).json({ ok: false, error: 'no_bot_token' });
 
-    // secret_key = HMAC_SHA256(bot_token, key="WebAppData")
     const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
     const calcHash  = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
 
@@ -69,9 +69,8 @@ app.get('/api/validate', (req, res) => {
     res.status(500).json({ ok: false, error: 'server_error' });
   }
 });
-// -------------------------------------------
 
-// ---------- Python bootstrap ----------
+// ---------- helpers ----------
 function run(cmd, args, opts = {}) {
   return new Promise(resolve => {
     const p = spawn(cmd, args, { stdio: 'inherit', ...opts });
@@ -80,15 +79,13 @@ function run(cmd, args, opts = {}) {
 }
 
 async function ensurePip() {
-  // 1) попробуем pip
+  // 1) пробуем pip
   if (await run(PY, ['-m', 'pip', '--version'], { cwd: ROOT })) return true;
-
-  // 2) попробуем ensurepip (если модуль есть)
+  // 2) пробуем ensurepip
   if (await run(PY, ['-m', 'ensurepip', '--upgrade'], { cwd: ROOT })) {
-    return await run(PY, ['-m', 'pip', '--version'], { cwd: ROOT });
+    if (await run(PY, ['-m', 'pip', '--version'], { cwd: ROOT })) return true;
   }
-
-  // 3) жёсткий bootstrap без curl/wget: качаем get-pip.py через urllib и исполняем
+  // 3) bootstrap через get-pip.py (urllib)
   const inline = `
 import urllib.request, ssl
 url = "https://bootstrap.pypa.io/get-pip.py"
@@ -109,36 +106,49 @@ print("[pip] installed")
 
 async function installPyDeps() {
   if (!fs.existsSync(PY_TARGET)) fs.mkdirSync(PY_TARGET, { recursive: true });
-  const reqFile = path.join(ROOT, 'requirements.txt');
+  const req = path.join(ROOT, 'requirements.txt');
 
-  // если есть requirements.txt — используем его, иначе ставим минимум
-  const args = fs.existsSync(reqFile)
+  const args = fs.existsSync(req)
     ? ['-m', 'pip', 'install', '--no-cache-dir', '--upgrade', '-r', 'requirements.txt', '--target', PY_TARGET]
-    : ['-m', 'pip', 'install', '--no-cache-dir', '--upgrade', 'aiogram', 'python-dotenv', '--target', PY_TARGET];
+    : ['-m', 'pip', 'install', '--no-cache-dir', '--upgrade', 'aiogram', 'python-dotenv', 'prisma==0.15.0', '--target', PY_TARGET];
 
   const ok = await run(PY, args, { cwd: ROOT });
-  if (!ok) console.error('[pip] install failed (packages may be missing)');
+  if (!ok) console.error('[pip] install failed');
 }
 
-async function preparePython() {
-  const ok = await ensurePip();
-  if (!ok) {
-    console.error('[pip] cannot bootstrap pip — Python в образе слишком урезан');
+async function preparePrisma() {
+  // генерим клиента из prisma/schema.prisma
+  const env = {
+    ...process.env,
+    PYTHONPATH: [PY_TARGET, process.env.PYTHONPATH || ''].filter(Boolean).join(':'),
+    PYTHONNOUSERSITE: '1',
+  };
+
+  // Показать версии (полезно в логах)
+  await run(PY, ['-m', 'prisma', '--version'], { cwd: ROOT, env });
+
+  const genOk = await run(PY, ['-m', 'prisma', 'generate', '--schema', PRISMA_SCHEMA], { cwd: ROOT, env });
+  if (!genOk) {
+    console.error('[prisma] generate failed');
     return;
   }
-  await installPyDeps();
-}
-// ---------------------------------------
 
-// ---------- Bot runner ----------
+  // Если есть строка подключения — создадим/обновим схему в БД
+  if (process.env.DATABASE_URL) {
+    const pushOk = await run(PY, ['-m', 'prisma', 'db', 'push', '--schema', PRISMA_SCHEMA], { cwd: ROOT, env });
+    if (!pushOk) console.error('[prisma] db push failed (check DATABASE_URL)');
+  } else {
+    console.log('[prisma] DATABASE_URL not set, skip db push');
+  }
+}
+
 function startPythonBot() {
   const env = {
     ...process.env,
     PYTHONPATH: [PY_TARGET, process.env.PYTHONPATH || ''].filter(Boolean).join(':'),
-    PYTHONNOUSERSITE: '1'
+    PYTHONNOUSERSITE: '1',
   };
   const botPath = path.join(ROOT, 'bot.py');
-
   const child = spawn(PY, [botPath], { cwd: ROOT, env, stdio: 'inherit' });
   console.log(`[bot] started pid=${child.pid}`);
 
@@ -148,15 +158,20 @@ function startPythonBot() {
   });
   child.on('error', err => console.error('[bot] failed to start:', err?.message));
 }
-// ---------------------------------
 
-// Start sequence: prepare python → bot → API
-preparePython()
-  .catch(err => console.error('[pip] error:', err?.message))
-  .finally(() => {
-    startPythonBot();
-    app.listen(PORT, HOST, () => console.log(`API listening on ${HOST}:${PORT}`));
-  });
+// ---------- boot sequence ----------
+(async () => {
+  const pipOk = await ensurePip();
+  if (!pipOk) {
+    console.error('[pip] cannot bootstrap pip — Python в образе слишком урезан');
+  } else {
+    await installPyDeps();
+    await preparePrisma();
+  }
+
+  startPythonBot();
+  app.listen(PORT, HOST, () => console.log(`API listening on ${HOST}:${PORT}`));
+})();
 
 process.on('SIGTERM', () => process.exit(0));
 process.on('SIGINT',  () => process.exit(0));
