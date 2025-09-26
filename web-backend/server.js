@@ -2,6 +2,37 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
+import { spawn } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function startPythonBot() {
+  const py = process.env.PYTHON || 'python3';   // можно задать PYTHON=python
+  const botPath = path.resolve(__dirname, '..', 'bot.py');
+
+  const child = spawn(py, [botPath], {
+    cwd: path.resolve(__dirname, '..'),
+    env: process.env,
+    stdio: 'inherit'
+  });
+
+  console.log(`[bot] started pid=${child.pid}`);
+
+  child.on('exit', (code, signal) => {
+    console.log(`[bot] exited code=${code} signal=${signal} -> restart in 3s`);
+    setTimeout(startPythonBot, 3000);
+  });
+
+  child.on('error', (err) => {
+    console.error('[bot] failed to start:', err?.message);
+  });
+
+  return child;
+}
+
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -17,7 +48,8 @@ app.use(cors({
   }
 }));
 app.use(express.json());
-
+app.get('/', (req, res) => res.send('OK'));
+app.get('/health', (req, res) => res.json({ ok: true }));
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 // Telegram WebApp initData validation
@@ -65,5 +97,7 @@ app.get('/api/validate', (req, res) => {
 
 // слушаем на 0.0.0.0
 const HOST = '0.0.0.0';
+startPythonBot();
 app.listen(PORT, HOST, () => console.log(`API listening on ${HOST}:${PORT}`));
-
+process.on('SIGTERM', () => process.exit(0));
+process.on('SIGINT',  () => process.exit(0));

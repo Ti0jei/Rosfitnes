@@ -3,7 +3,7 @@
   const qs = new URLSearchParams(location.search);
 
   // Пропиши URL бэкенда если поднимешь API (иначе оставь пустым)
-  const API_BASE = ""; // например: "https://api.example.com"
+  const API_BASE = "https://ti0jei-rosfitnes-c178.twc1.net"; // например: "https://api.example.com"
 
   const envStatus = document.getElementById('envStatus');
   const greetingEl = document.getElementById('greeting');
