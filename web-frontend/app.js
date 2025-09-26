@@ -4,7 +4,7 @@
   const qs = new URLSearchParams(location.search);
 
   // URL вашего бэкенда (Express из web-backend/server.js)
-  const API_BASE = "https://ti0jei-rosfitnes-c178.twc1.net";
+  const API_BASE = window.ENV?.API_BASE || "";
 
   // DOM-узлы
   const envStatus   = document.getElementById('envStatus');
@@ -126,6 +126,10 @@
 window.API_BASE = API_BASE;
 window.tg = tg;
 window.buildInitData = typeof buildInitData === 'function' ? buildInitData : () => (tg?.initData || '');
+console.log("tg.initData:", tg?.initData);
+console.log("tg.initDataUnsafe:", tg?.initDataUnsafe);
+window.API_BASE = API_BASE;
+window.buildInitData = () => tg?.initData || '';
 
   init();
 })();

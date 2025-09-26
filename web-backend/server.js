@@ -1,15 +1,20 @@
-import 'dotenv/config';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// 1) загружаем .env ИМЕННО из корня
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+import dotenv from 'dotenv';
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+
+// дальше обычные импорты
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
 import { spawn } from 'child_process';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import fs from 'fs';
 import https from 'https';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
 
 const ROOT      = path.resolve(__dirname, '..');
 const HOST      = '0.0.0.0';
