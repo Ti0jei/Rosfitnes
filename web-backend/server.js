@@ -166,3 +166,42 @@ function startPythonBot() {
 
 process.on('SIGTERM', () => process.exit(0));
 process.on('SIGINT',  () => process.exit(0));
+// [GET] /api/user?initData=...
+app.get('/api/user', (req, res) => {
+  try {
+    const initData = req.query.initData;
+    if (!initData) return res.status(400).json({ ok: false, error: 'no_initData' });
+
+    const params = new URLSearchParams(initData);
+    const hash = params.get('hash');
+    if (!hash) return res.status(400).json({ ok: false, error: 'no_hash' });
+
+    const pairs = [];
+    for (const [k, v] of params.entries()) if (k !== 'hash') pairs.push(`${k}=${v}`);
+    pairs.sort();
+    const dataCheckString = pairs.join('\n');
+
+    const botToken = process.env.BOT_TOKEN;
+    if (!botToken) return res.status(500).json({ ok: false, error: 'no_bot_token' });
+
+    const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+    const calcHash  = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+
+    if (calcHash !== hash) return res.status(401).json({ ok: false, error: 'bad_hash' });
+
+    // 👤 Берём user (id, имя)
+    const userStr = params.get('user');
+    const user = userStr ? JSON.parse(userStr) : null;
+
+    // 🧠 Здесь мы можем подставить фиктивный тариф (или взять из базы в будущем)
+    const profile = {
+      first_name: user?.first_name || 'друг',
+      tariffName: 'Базовый' // тут можно подставлять тариф динамически
+    };
+
+    return res.json({ ok: true, user, profile });
+  } catch (e) {
+    console.error('[api/user] error', e);
+    res.status(500).json({ ok: false, error: 'server_error' });
+  }
+});
