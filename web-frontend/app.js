@@ -58,15 +58,45 @@
       const json = await res.json().catch(() => ({}));
       if (!json?.ok) return;
 
-      const fn = json.profile?.first_name || json.user?.first_name;
-      if (fn) greetingEl.textContent = `Привет, ${fn}!`;
+      const name = json.profile?.first_name || json.user?.first_name || 'друг';
+      const tariff = json.profile?.tariffName || 'неизвестно';
 
-      const tariff = json.profile?.tariffName || 'не куплен';
+      greetingEl.textContent = `Привет, ${name}!`;
       tariffEl.textContent = `Тариф: ${tariff}`;
+      renderTilesByTariff(tariff);
     } catch (e) {
       console.warn('[user] fetch failed', e);
     }
   }
+function renderTilesByTariff(tariff) {
+  const tiles = document.getElementById("tiles");
+  if (!tiles) return;
+
+  tiles.innerHTML = ""; // очищаем
+
+  const base = [
+    "Тренировки",
+    "Дневник тренировок",
+    "Дневник питания",
+    "Упражнения"
+  ];
+  const extra = (tariff === "Выгодный") ? ["Связь с куратором"] :
+                (tariff === "Максимум") ? ["Связь с куратором", "Поддержка"] : [];
+
+  const actions = [...base, ...extra];
+
+  actions.forEach(label => {
+    const tile = document.createElement("button");
+    tile.className = "tile";
+    tile.dataset.action = label;
+    tile.innerHTML = `
+      <div class="title">${label}</div>
+      <div class="desc">Раздел в разработке</div>
+    `;
+    tile.addEventListener("click", () => showAlert(`«${label}» — раздел в разработке`));
+    tiles.appendChild(tile);
+  });
+}
 
   async function init() {
     try {
