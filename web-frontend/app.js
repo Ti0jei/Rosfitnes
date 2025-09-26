@@ -122,6 +122,10 @@
       showAlert('Ошибка инициализации приложения');
     }
   }
+// --- DEBUG EXPORTS ---
+window.API_BASE = API_BASE;
+window.tg = tg;
+window.buildInitData = typeof buildInitData === 'function' ? buildInitData : () => (tg?.initData || '');
 
   init();
 })();
