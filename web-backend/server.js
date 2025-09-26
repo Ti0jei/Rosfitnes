@@ -215,27 +215,18 @@ app.get('/api/user', async (req, res) => {
       });
     } catch (e) {
       console.error('[prisma] findUnique error', e);
-      return res.status(500).json({ ok: false, error: 'db_error' });
+      // ⚠️ даже если ошибка — продолжаем с дефолтными данными
     }
 
-    if (!dbUser) {
-      // Не найден пользователь в БД — возвращаем минимальные данные (имя из Telegram)
-      const profile = {
-        first_name: user?.first_name || null,
-        tariffName: null
-      };
-      return res.json({ ok: true, user, profile });
-    }
-
-    // 4) Нормализуем профиль для фронта: гарантируем поля first_name и tariffName
     const profile = {
-      first_name: dbUser.first_name || dbUser.name || user?.first_name || null,
-      tariffName: dbUser.tariffName || dbUser.tariff || null,
-      // при желании можно вернуть дополнительные поля:
-      // tg_id: dbUser.tg_id, email: dbUser.email, etc.
+      first_name: dbUser?.first_name || dbUser?.name || user?.first_name || 'друг',
+      tariffName: dbUser?.tariffName || dbUser?.tariff || 'Базовый',
     };
-
     return res.json({ ok: true, user, profile });
+
+
+    
+    
   } catch (e) {
     console.error('[api/user] error', e);
     res.status(500).json({ ok: false, error: 'server_error' });
