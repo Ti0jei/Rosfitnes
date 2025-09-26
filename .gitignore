@@ -1,0 +1,12 @@
+# Node
+node_modules/
+*.log
+
+# Env
+.env
+web-backend/.env
+
+# OS/Editors
+.DS_Store
+.idea/
+.vscode/

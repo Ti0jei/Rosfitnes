@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FitApp — Telegram WebApp</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Telegram Web App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <header class="header">
+      <div class="brand">
+        <div class="logo">🏋️</div>
+        <div>
+          <h1>FitApp</h1>
+          <p class="muted">минимальный веб-клиент</p>
+        </div>
+      </div>
+      <div class="user" id="userbox">
+        <span id="greeting">Привет!</span>
+        <span class="badge" id="tariff">Тариф: неизвестно</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="notice" id="envStatus" hidden>Проверка доступа…</section>
+
+      <section class="grid">
+        <button class="tile" data-action="workout">
+          <div class="title">Тренировки</div>
+          <div class="desc">Раздел в разработке</div>
+        </button>
+        <button class="tile" data-action="progress">
+          <div class="title">Прогресс</div>
+          <div class="desc">Раздел в разработке</div>
+        </button>
+        <button class="tile" data-action="chat">
+          <div class="title">Чат</div>
+          <div class="desc">Раздел в разработке</div>
+        </button>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>v0.1.0</span>
+      <span>•</span>
+      <span id="themeName">Тема</span>
+    </footer>
+  </div>
+</body>
+</html>
